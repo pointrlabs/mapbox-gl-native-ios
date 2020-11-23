@@ -6713,16 +6713,7 @@ public:
         return;
     }
 
-    CGPoint userPoint;
-    if (self.userTrackingMode != MGLUserTrackingModeNone
-        && self.userTrackingState == MGLUserTrackingStateChanged)
-    {
-        userPoint = self.userLocationAnnotationViewCenter;
-    }
-    else
-    {
-        userPoint = MGLPointRounded([self convertCoordinate:self.userLocation.coordinate toPointToView:self]);
-    }
+    CGPoint userPoint = MGLPointRounded([self convertCoordinate:self.userLocation.coordinate toPointToView:self]);
 
     if ( ! annotationView.superview)
     {
