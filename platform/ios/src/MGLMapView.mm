@@ -5908,7 +5908,7 @@ public:
      completionHandler:^{
         MGLMapView *strongSelf = weakSelf;
         if (strongSelf.userTrackingState == MGLUserTrackingStateBegan ||
-            strongSelf.userTrackingState == MGLDistanceThresholdForCameraPause)
+            strongSelf.userTrackingState == MGLUserTrackingStateBeginSignificantTransition)
         {
             strongSelf.userTrackingState = MGLUserTrackingStateChanged;
         }
