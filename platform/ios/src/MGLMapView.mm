@@ -1131,7 +1131,7 @@ public:
     else
     {
         _contentInset = contentInset;
-        [self didUpdateLocationWithUserTrackingAnimated:animated completionHandler:completion];
+        [self didUpdateLocationWithUserTrackingHeading:nil animated:animated completionHandler:completion];
     }
 
     // Compass, logo and attribution button constraints needs to be updated.z
@@ -5757,7 +5757,17 @@ public:
     [self locationManager:manager didUpdateLocations:locations animated:YES completionHandler:nil];
 }
 
-- (void)locationManager:(__unused id<MGLLocationManager>)manager didUpdateLocations:(NSArray *)locations animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)locationManager:(id<MGLLocationManager>)manager didUpdateLocation:(nonnull CLLocation *)location heading:(nullable CLHeading *)heading
+{
+    [self locationManager:manager didUpdateLocations:@[location] heading:heading animated:YES completionHandler:nil];
+}
+
+- (void)locationManager:(id<MGLLocationManager>)manager didUpdateLocations:(NSArray *)locations animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+{
+    [self locationManager:manager didUpdateLocations:locations heading:nil animated:animated completionHandler:completion];
+}
+
+- (void)locationManager:(__unused id<MGLLocationManager>)manager didUpdateLocations:(NSArray *)locations heading:(nullable CLHeading *)heading animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     CLLocation *oldLocation = self.userLocation.location;
     CLLocation *newLocation = locations.lastObject;
@@ -5779,7 +5789,7 @@ public:
         }
     }
 
-    [self didUpdateLocationWithUserTrackingAnimated:animated completionHandler:completion];
+    [self didUpdateLocationWithUserTrackingHeading:heading animated:animated completionHandler:completion];
 
     NSTimeInterval duration = MGLAnimationDuration;
     if (oldLocation && ! CGPointEqualToPoint(self.userLocationAnnotationView.center, CGPointZero))
@@ -5796,7 +5806,7 @@ public:
     }
 }
 
-- (void)didUpdateLocationWithUserTrackingAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationWithUserTrackingHeading:(nullable CLHeading *)heading animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     CLLocation *location = self.userLocation.location;
     if ( ! _showsUserLocation || ! location
@@ -5808,6 +5818,15 @@ public:
             completion();
         }
         return;
+    }
+
+    CLLocationDirection direction = [self directionByFollowingWithCourse];
+    if (heading != nil && heading.headingAccuracy > 0) {
+        self.userLocation.heading = heading;
+        if (self.userTrackingMode == MGLUserTrackingModeFollowWithHeading)
+        {
+            direction = (heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading);
+        }
     }
 
     // If the user location annotation is already where it’s supposed to be,
@@ -5830,30 +5849,30 @@ public:
         if (self.userTrackingState != MGLUserTrackingStateBegan)
         {
             // Keep both the user and the destination in view.
-            [self didUpdateLocationWithTargetAnimated:animated completionHandler:completion];
+            [self didUpdateLocationWithTargetDirection:direction animated:animated completionHandler:completion];
         }
     }
     else if (self.userTrackingState == MGLUserTrackingStatePossible)
     {
         // The first location update is often a great distance away from the
         // current viewport, so fly there to provide additional context.
-        [self didUpdateLocationSignificantlyAnimated:animated completionHandler:completion];
+        [self didUpdateLocationSignificantlyDirection:direction animated:animated completionHandler:completion];
     }
     else if (self.userTrackingState == MGLUserTrackingStateChanged)
     {
         // Subsequent updates get a more subtle animation.
-        [self didUpdateLocationIncrementallyAnimated:animated completionHandler:completion];
+        [self didUpdateLocationIncrementallyDirection:direction animated:animated completionHandler:completion];
     }
     [self unrotateIfNeededAnimated:YES];
 }
 
 /// Changes the viewport based on an incremental location update.
-- (void)didUpdateLocationIncrementallyAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationIncrementallyDirection:(CLLocationDirection)direction animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     [self _setCenterCoordinate:self.userLocation.location.coordinate
                    edgePadding:self.edgePaddingForFollowing
                      zoomLevel:self.zoomLevel
-                     direction:self.directionByFollowingWithCourse
+                     direction:direction
                       duration:animated ? MGLUserLocationAnimationDuration : 0
        animationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear]
              completionHandler:completion];
@@ -5861,7 +5880,7 @@ public:
 
 /// Changes the viewport based on a significant location update, such as the
 /// first location update.
-- (void)didUpdateLocationSignificantlyAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationSignificantlyDirection:(CLLocationDirection)direction animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     
     if (_distanceFromOldUserLocation >= MGLDistanceThresholdForCameraPause) {
@@ -5872,7 +5891,7 @@ public:
 
     MGLMapCamera *camera = self.camera;
     camera.centerCoordinate = self.userLocation.location.coordinate;
-    camera.heading = self.directionByFollowingWithCourse;
+    camera.heading = direction;
     if (self.zoomLevel < MGLMinimumZoomLevelForUserTracking)
     {
         camera.altitude = MGLAltitudeForZoomLevel(MGLDefaultZoomLevelForUserTracking,
@@ -5902,7 +5921,7 @@ public:
 
 /// Changes the viewport based on a location update in the presence of a target
 /// coordinate that must also be displayed on the map concurrently.
-- (void)didUpdateLocationWithTargetAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationWithTargetDirection:(CLLocationDirection)direction animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     BOOL firstUpdate = self.userTrackingState == MGLUserTrackingStatePossible;
     void (^animationCompletion)(void);
@@ -5940,7 +5959,7 @@ public:
     [self _setVisibleCoordinates:foci
                            count:sizeof(foci) / sizeof(foci[0])
                      edgePadding:inset
-                       direction:self.directionByFollowingWithCourse
+                       direction:direction
                         duration:animated ? MGLUserLocationAnimationDuration : 0
          animationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear]
                completionHandler:animationCompletion];

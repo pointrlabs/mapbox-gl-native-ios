@@ -165,6 +165,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)locationManager:(id<MGLLocationManager>)manager
      didUpdateLocations:(NSArray<CLLocation *> *)locations;
 
+/**
+ Notifies the delegate with the new location data and the heading.
+
+ @param manager The location manager reporting the update.
+ @param location The location update.
+ @param heading The heading update.
+ */
+- (void)locationManager:(id<MGLLocationManager>)manager
+      didUpdateLocation:(nonnull CLLocation *)location
+                heading:(nullable CLHeading *)heading;
+
 #pragma mark Responding to Heading Updates
 
 /**
