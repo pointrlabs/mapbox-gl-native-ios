@@ -1131,7 +1131,7 @@ public:
     else
     {
         _contentInset = contentInset;
-        [self didUpdateLocationWithUserTrackingHeading:nil animated:animated completionHandler:completion];
+        [self didUpdateLocationWithUserTrackingAnimated:animated completionHandler:completion];
     }
 
     // Compass, logo and attribution button constraints needs to be updated.z
@@ -5806,6 +5806,10 @@ public:
     }
 }
 
+- (void)didUpdateLocationWithUserTrackingAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion {
+    [self didUpdateLocationWithUserTrackingHeading:nil animated:animated completionHandler:completion];
+}
+
 - (void)didUpdateLocationWithUserTrackingHeading:(nullable CLHeading *)heading animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     CLLocation *location = self.userLocation.location;
@@ -5820,13 +5824,8 @@ public:
         return;
     }
 
-    CLLocationDirection direction = [self directionByFollowingWithCourse];
-    if (heading != nil && heading.headingAccuracy > 0) {
+    if (heading != nil && heading.headingAccuracy >= 0) {
         self.userLocation.heading = heading;
-        if (self.userTrackingMode == MGLUserTrackingModeFollowWithHeading)
-        {
-            direction = (heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading);
-        }
     }
 
     // If the user location annotation is already where it’s supposed to be,
@@ -5849,30 +5848,30 @@ public:
         if (self.userTrackingState != MGLUserTrackingStateBegan)
         {
             // Keep both the user and the destination in view.
-            [self didUpdateLocationWithTargetDirection:direction animated:animated completionHandler:completion];
+            [self didUpdateLocationWithTargetAnimated:animated completionHandler:completion];
         }
     }
     else if (self.userTrackingState == MGLUserTrackingStatePossible)
     {
         // The first location update is often a great distance away from the
         // current viewport, so fly there to provide additional context.
-        [self didUpdateLocationSignificantlyDirection:direction animated:animated completionHandler:completion];
+        [self didUpdateLocationSignificantlyAnimated:animated completionHandler:completion];
     }
     else if (self.userTrackingState == MGLUserTrackingStateChanged)
     {
         // Subsequent updates get a more subtle animation.
-        [self didUpdateLocationIncrementallyDirection:direction animated:animated completionHandler:completion];
+        [self didUpdateLocationIncrementallyAnimated:animated completionHandler:completion];
     }
     [self unrotateIfNeededAnimated:YES];
 }
 
 /// Changes the viewport based on an incremental location update.
-- (void)didUpdateLocationIncrementallyDirection:(CLLocationDirection)direction animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationIncrementallyAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     [self _setCenterCoordinate:self.userLocation.location.coordinate
                    edgePadding:self.edgePaddingForFollowing
                      zoomLevel:self.zoomLevel
-                     direction:direction
+                     direction:self.directionAccordingToUserTrackingMode
                       duration:animated ? MGLUserLocationAnimationDuration : 0
        animationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear]
              completionHandler:completion];
@@ -5880,7 +5879,7 @@ public:
 
 /// Changes the viewport based on a significant location update, such as the
 /// first location update.
-- (void)didUpdateLocationSignificantlyDirection:(CLLocationDirection)direction animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationSignificantlyAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     
     if (_distanceFromOldUserLocation >= MGLDistanceThresholdForCameraPause) {
@@ -5891,7 +5890,7 @@ public:
 
     MGLMapCamera *camera = self.camera;
     camera.centerCoordinate = self.userLocation.location.coordinate;
-    camera.heading = direction;
+    camera.heading = self.directionAccordingToUserTrackingMode;
     if (self.zoomLevel < MGLMinimumZoomLevelForUserTracking)
     {
         camera.altitude = MGLAltitudeForZoomLevel(MGLDefaultZoomLevelForUserTracking,
@@ -5921,7 +5920,7 @@ public:
 
 /// Changes the viewport based on a location update in the presence of a target
 /// coordinate that must also be displayed on the map concurrently.
-- (void)didUpdateLocationWithTargetDirection:(CLLocationDirection)direction animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)didUpdateLocationWithTargetAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     BOOL firstUpdate = self.userTrackingState == MGLUserTrackingStatePossible;
     void (^animationCompletion)(void);
@@ -5959,7 +5958,7 @@ public:
     [self _setVisibleCoordinates:foci
                            count:sizeof(foci) / sizeof(foci[0])
                      edgePadding:inset
-                       direction:direction
+                       direction:self.directionAccordingToUserTrackingMode
                         duration:animated ? MGLUserLocationAnimationDuration : 0
          animationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear]
                completionHandler:animationCompletion];
@@ -5992,6 +5991,18 @@ public:
     return inset;
 }
 
+- (CLLocationDirection)directionAccordingToUserTrackingMode {
+    CLLocationDirection direction = [self directionByFollowingWithCourse];
+    if (self.userTrackingMode == MGLUserTrackingModeFollowWithHeading)
+    {
+        CLHeading *heading = self.userLocation.heading;
+        CLLocationDirection newHeadingDirection = (heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading);
+        if (newHeadingDirection >= 0) {
+            direction = newHeadingDirection;
+        }
+    }
+    return direction;
+}
 /// Returns the direction the map should be turned to due to course tracking.
 - (CLLocationDirection)directionByFollowingWithCourse
 {
