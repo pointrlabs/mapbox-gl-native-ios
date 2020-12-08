@@ -5789,7 +5789,11 @@ public:
         }
     }
 
-    [self didUpdateLocationWithUserTrackingHeading:heading animated:animated completionHandler:completion];
+    if (heading != nil && heading.headingAccuracy >= 0) {
+        self.userLocation.heading = heading;
+    }
+
+    [self didUpdateLocationWithUserTrackingAnimated:animated completionHandler:completion];
 
     NSTimeInterval duration = MGLAnimationDuration;
     if (oldLocation && ! CGPointEqualToPoint(self.userLocationAnnotationView.center, CGPointZero))
@@ -5807,11 +5811,6 @@ public:
 }
 
 - (void)didUpdateLocationWithUserTrackingAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion {
-    [self didUpdateLocationWithUserTrackingHeading:nil animated:animated completionHandler:completion];
-}
-
-- (void)didUpdateLocationWithUserTrackingHeading:(nullable CLHeading *)heading animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
-{
     CLLocation *location = self.userLocation.location;
     if ( ! _showsUserLocation || ! location
         || ! CLLocationCoordinate2DIsValid(location.coordinate)
@@ -5822,10 +5821,6 @@ public:
             completion();
         }
         return;
-    }
-
-    if (heading != nil && heading.headingAccuracy >= 0) {
-        self.userLocation.heading = heading;
     }
 
     // If the user location annotation is already where it’s supposed to be,
