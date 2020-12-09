@@ -99,7 +99,7 @@ if [[ "${GITHUB_RELEASE}" == true ]]; then
     git checkout ${VERSION_TAG}
     step "Deploying version ${PUBLISH_VERSION}…"
 else
-    PUBLISH_VERSION=${VERSION_TAG}
+    PUBLISH_VERSION=$( echo ${VERSION_TAG} | sed 's/^ios-v//' )
     step "Building packages for version ${PUBLISH_VERSION} (Not deploying to Github)"
 fi
 
@@ -120,10 +120,10 @@ if [[ "${GITHUB_RELEASE}" == true ]]; then
 fi
 
 # Used for binary release on Github - includes events SDK
-buildPackageStyle "iframework" "dynamic-with-events"
+# buildPackageStyle "iframework" "dynamic-with-events"
 
 # Used for Cocoapods/Carthage
-buildPackageStyle "iframework" "dynamic"
+# buildPackageStyle "iframework" "dynamic"
 buildPackageStyle "iframework SYMBOLS=NO" "stripped-dynamic"
 
 step "Finished deploying ${PUBLISH_VERSION} in $(($SECONDS / 60)) minutes and $(($SECONDS % 60)) seconds"

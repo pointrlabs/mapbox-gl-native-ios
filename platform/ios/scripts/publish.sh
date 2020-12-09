@@ -53,8 +53,8 @@ fi
 
 step "Uploading ${ZIP_FILENAME} to s3… ${DRYRUN}"
 
-aws s3 cp ${ZIP_FILENAME} s3://mapbox/mapbox-gl-native/ios/builds/ --acl public-read ${PROGRESS} ${DRYRUN}
-S3_URL=https://mapbox.s3.amazonaws.com/mapbox-gl-native/ios/builds/${ZIP_FILENAME}
+az storage blob upload -c mapbox-sdk -f ${ZIP_FILENAME} -n ${ZIP_FILENAME}
+S3_URL=$(az storage blob url -c mapbox-sdk -n ${ZIP_FILENAME} | sed 's/"//g' )
 echo "URL: ${S3_URL}"
 echo "mapbox-gl-native is currently hardcoded"
 
