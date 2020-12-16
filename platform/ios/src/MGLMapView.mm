@@ -5757,7 +5757,17 @@ public:
     [self locationManager:manager didUpdateLocations:locations animated:YES completionHandler:nil];
 }
 
-- (void)locationManager:(__unused id<MGLLocationManager>)manager didUpdateLocations:(NSArray *)locations animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+- (void)locationManager:(id<MGLLocationManager>)manager didUpdateLocation:(nonnull CLLocation *)location heading:(nullable CLHeading *)heading
+{
+    [self locationManager:manager didUpdateLocations:@[location] heading:heading animated:YES completionHandler:nil];
+}
+
+- (void)locationManager:(id<MGLLocationManager>)manager didUpdateLocations:(NSArray *)locations animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
+{
+    [self locationManager:manager didUpdateLocations:locations heading:nil animated:animated completionHandler:completion];
+}
+
+- (void)locationManager:(__unused id<MGLLocationManager>)manager didUpdateLocations:(NSArray *)locations heading:(nullable CLHeading *)heading animated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
 {
     CLLocation *oldLocation = self.userLocation.location;
     CLLocation *newLocation = locations.lastObject;
@@ -5779,6 +5789,10 @@ public:
         }
     }
 
+    if (heading != nil && heading.headingAccuracy >= 0) {
+        self.userLocation.heading = heading;
+    }
+
     [self didUpdateLocationWithUserTrackingAnimated:animated completionHandler:completion];
 
     NSTimeInterval duration = MGLAnimationDuration;
@@ -5796,8 +5810,7 @@ public:
     }
 }
 
-- (void)didUpdateLocationWithUserTrackingAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion
-{
+- (void)didUpdateLocationWithUserTrackingAnimated:(BOOL)animated completionHandler:(nullable void (^)(void))completion {
     CLLocation *location = self.userLocation.location;
     if ( ! _showsUserLocation || ! location
         || ! CLLocationCoordinate2DIsValid(location.coordinate)
@@ -5853,7 +5866,7 @@ public:
     [self _setCenterCoordinate:self.userLocation.location.coordinate
                    edgePadding:self.edgePaddingForFollowing
                      zoomLevel:self.zoomLevel
-                     direction:self.directionByFollowingWithCourse
+                     direction:self.directionAccordingToUserTrackingMode
                       duration:animated ? MGLUserLocationAnimationDuration : 0
        animationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear]
              completionHandler:completion];
@@ -5872,7 +5885,7 @@ public:
 
     MGLMapCamera *camera = self.camera;
     camera.centerCoordinate = self.userLocation.location.coordinate;
-    camera.heading = self.directionByFollowingWithCourse;
+    camera.heading = self.directionAccordingToUserTrackingMode;
     if (self.zoomLevel < MGLMinimumZoomLevelForUserTracking)
     {
         camera.altitude = MGLAltitudeForZoomLevel(MGLDefaultZoomLevelForUserTracking,
@@ -5889,7 +5902,7 @@ public:
      completionHandler:^{
         MGLMapView *strongSelf = weakSelf;
         if (strongSelf.userTrackingState == MGLUserTrackingStateBegan ||
-            strongSelf.userTrackingState == MGLDistanceThresholdForCameraPause)
+            strongSelf.userTrackingState == MGLUserTrackingStateBeginSignificantTransition)
         {
             strongSelf.userTrackingState = MGLUserTrackingStateChanged;
         }
@@ -5940,7 +5953,7 @@ public:
     [self _setVisibleCoordinates:foci
                            count:sizeof(foci) / sizeof(foci[0])
                      edgePadding:inset
-                       direction:self.directionByFollowingWithCourse
+                       direction:self.directionAccordingToUserTrackingMode
                         duration:animated ? MGLUserLocationAnimationDuration : 0
          animationTimingFunction:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear]
                completionHandler:animationCompletion];
@@ -5973,6 +5986,18 @@ public:
     return inset;
 }
 
+- (CLLocationDirection)directionAccordingToUserTrackingMode {
+    CLLocationDirection direction = [self directionByFollowingWithCourse];
+    if (self.userTrackingMode == MGLUserTrackingModeFollowWithHeading)
+    {
+        CLHeading *heading = self.userLocation.heading;
+        CLLocationDirection newHeadingDirection = (heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading);
+        if (newHeadingDirection >= 0) {
+            direction = newHeadingDirection;
+        }
+    }
+    return direction;
+}
 /// Returns the direction the map should be turned to due to course tracking.
 - (CLLocationDirection)directionByFollowingWithCourse
 {
@@ -6694,16 +6719,7 @@ public:
         return;
     }
 
-    CGPoint userPoint;
-    if (self.userTrackingMode != MGLUserTrackingModeNone
-        && self.userTrackingState == MGLUserTrackingStateChanged)
-    {
-        userPoint = self.userLocationAnnotationViewCenter;
-    }
-    else
-    {
-        userPoint = MGLPointRounded([self convertCoordinate:self.userLocation.coordinate toPointToView:self]);
-    }
+    CGPoint userPoint = MGLPointRounded([self convertCoordinate:self.userLocation.coordinate toPointToView:self]);
 
     if ( ! annotationView.superview)
     {
